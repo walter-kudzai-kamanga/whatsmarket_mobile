@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_colors.dart';
+
 class AppBottomNavBar extends StatelessWidget {
   const AppBottomNavBar({
     super.key,
@@ -17,15 +19,15 @@ class AppBottomNavBar extends StatelessWidget {
       top: false,
       child: Container(
         decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE6EBF1))),
+          color: AppColors.beigeLight,
+          border: Border(top: BorderSide(color: AppColors.beigeDark)),
         ),
         child: BottomNavigationBar(
           currentIndex: currentIndex,
           onTap: onTap,
           type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF1C3F66),
+          backgroundColor: AppColors.beigeLight,
+          selectedItemColor: AppColors.primaryGreen,
           unselectedItemColor: const Color(0xFF8391A3),
           showUnselectedLabels: true,
           showSelectedLabels: true,

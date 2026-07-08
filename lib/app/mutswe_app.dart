@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_colors.dart';
 import 'app_shell.dart';
 
 class MutsweApp extends StatelessWidget {
@@ -11,11 +12,9 @@ class MutsweApp extends StatelessWidget {
       title: 'Mutswe',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1C3F66),
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primaryGreen),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF4F7FB),
+        scaffoldBackgroundColor: AppColors.beigeLight,
       ),
       home: const AppShell(),
     );
