@@ -200,9 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 height: MediaQuery.of(context).size.height * 0.32,
                 margin: const EdgeInsets.symmetric(horizontal: 0),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                ),
+                decoration: const BoxDecoration(color: Colors.white),
                 child: ClipRRect(
                   child: Stack(
                     children: [
