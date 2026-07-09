@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:mutswe/screens/mainScreens/home.dart';
 import 'package:mutswe/screens/rest/comparePage.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 // Theme Colors
 const Color _primaryGreen = Color(0xFF2E7D32);
@@ -451,15 +450,24 @@ class _MarketplacePageState extends State<MarketplacePage> {
     });
   }
 
+  Future<bool> _ensureLocationPermission() async {
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      final requested = await Geolocator.requestPermission();
+      return requested == LocationPermission.whileInUse ||
+          requested == LocationPermission.always;
+    }
+
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   Future<void> _getUserLocation() async {
     try {
-      final status = await Permission.locationWhenInUse.status;
-      if (!status.isGranted && !status.isLimited) {
-        final requested = await Permission.locationWhenInUse.request();
-        if (!requested.isGranted && !requested.isLimited) {
-          if (!mounted) return;
-          return;
-        }
+      final hasPermission = await _ensureLocationPermission();
+      if (!hasPermission) {
+        if (!mounted) return;
+        return;
       }
 
       if (!mounted) return;
@@ -479,8 +487,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
       setState(() {
         _userPosition = position;
       });
-    } on PermissionDeniedException catch (_) {
-      if (!mounted) return;
     } catch (error) {
       if (!mounted) return;
       debugPrint('Location lookup failed: $error');

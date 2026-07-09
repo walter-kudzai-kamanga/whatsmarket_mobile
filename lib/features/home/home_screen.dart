@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:mhj_maps/mhj_maps.dart';
 
 import '../../core/api/api_models.dart';
 import '../../core/api/whatsmarket_api.dart';
@@ -32,11 +32,31 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String _selectedType = 'all';
   String? _error;
+  Position? _userPosition;
+  bool _userMarkerAdded = false;
+  MhjMapsMapController? _mapController;
+
+  static const MhjMapsLatLng _fallbackCenter = MhjMapsLatLng(
+    lat: -17.825,
+    lng: 31.033,
+  );
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<bool> _ensureLocationPermission() async {
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      final requested = await Geolocator.requestPermission();
+      return requested == LocationPermission.whileInUse ||
+          requested == LocationPermission.always;
+    }
+
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
   }
 
   Future<void> _load() async {
@@ -45,17 +65,14 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     try {
-      final status = await Permission.locationWhenInUse.status;
-      if (!status.isGranted && !status.isLimited) {
-        final requested = await Permission.locationWhenInUse.request();
-        if (!requested.isGranted && !requested.isLimited) {
-          if (!mounted) return;
-          setState(() {
-            _vendors = [];
-            _error = 'Location permission is needed to find nearby providers.';
-          });
-          return;
-        }
+      final hasPermission = await _ensureLocationPermission();
+      if (!hasPermission) {
+        if (!mounted) return;
+        setState(() {
+          _vendors = [];
+          _error = 'Location permission is needed to find nearby providers.';
+        });
+        return;
       }
 
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -72,6 +89,12 @@ class _HomeScreenState extends State<HomeScreen> {
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+      if (!mounted) return;
+      setState(() {
+        _userPosition = pos;
+      });
+      _addUserLocationMarker();
+
       final vendors = await _api.getNearbyVendors(
         lat: pos.latitude,
         lng: pos.longitude,
@@ -80,13 +103,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted) return;
       setState(() => _vendors = vendors);
-    } on PermissionDeniedException catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _vendors = [];
-        _error =
-            'Location permission was denied. You can enable it in Settings.';
-      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Could not read your location right now.');
@@ -95,6 +111,48 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  void _handleMapCreated(MhjMapsMapController controller) {
+    _mapController = controller;
+    _addUserLocationMarker();
+  }
+
+  void _addUserLocationMarker() {
+    if (_mapController == null || _userPosition == null || _userMarkerAdded) {
+      return;
+    }
+
+    _mapController!.addCustomMarker(
+      position: MhjMapsLatLng(
+        lat: _userPosition!.latitude,
+        lng: _userPosition!.longitude,
+      ),
+      width: 34,
+      height: 34,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.blue,
+          shape: BoxShape.circle,
+          border: Border.fromBorderSide(
+            BorderSide(color: Colors.white, width: 3),
+          ),
+        ),
+      ),
+    );
+
+    if (mounted) {
+      setState(() {
+        _userMarkerAdded = true;
+      });
+    }
+  }
+
+  MhjMapsLatLng get _currentCenter {
+    return MhjMapsLatLng(
+      lat: _userPosition?.latitude ?? _fallbackCenter.lat,
+      lng: _userPosition?.longitude ?? _fallbackCenter.lng,
+    );
   }
 
   Future<void> _bookVendor(Vendor v) async {
@@ -140,17 +198,57 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
             children: [
               Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryGreen,
-                  borderRadius: BorderRadius.circular(22),
+                height: MediaQuery.of(context).size.height * 0.32,
+                margin: const EdgeInsets.symmetric(horizontal: 0),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
                 ),
-                child: const Text(
-                  'Nearby verified services',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
+                child: ClipRRect(
+                  child: Stack(
+                    children: [
+                      MhjMapsMap(
+                        center: _currentCenter,
+                        zoom: 14,
+                        theme: MhjMapsMapThemes.standard,
+                        showAttribution: true,
+                        showCompass: false,
+                        showScale: false,
+                        showUserLocation: _userPosition != null,
+                        showZoomControls: false,
+                        onMapCreated: _handleMapCreated,
+                      ),
+                      Positioned(
+                        left: 12,
+                        bottom: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.92),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                CupertinoIcons.location_solid,
+                                size: 14,
+                                color: AppColors.primaryGreen,
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'My location',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

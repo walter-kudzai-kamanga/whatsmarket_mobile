@@ -4,7 +4,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:mhj_maps/mhj_maps.dart';
 import 'package:mutswe/screens/rest/service_provider_map.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 // Theme Colors
 const Color _primaryGreen = Color(0xFF2E7D32);
@@ -77,10 +76,9 @@ class _HomeState extends State<Home> {
 
   Position? _userPosition;
   bool _isLoading = true;
-  bool _hasLocationPermission = false;
   bool _markersSeeded = false;
-  String? _locationNotice;
   int _selectedIndex = 0;
+  MhjMapsMapController? _mapController;
 
   final List<BottomNavigationBarItem> _navItems = const [
     BottomNavigationBarItem(icon: Icon(CupertinoIcons.home), label: 'Home'),
@@ -108,23 +106,25 @@ class _HomeState extends State<Home> {
     _getUserLocation();
   }
 
+  Future<bool> _ensureLocationPermission() async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   Future<void> _getUserLocation() async {
     try {
-      var status = await Permission.location.status;
-      if (!status.isGranted) {
-        status = await Permission.location.request();
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      if (!status.isGranted) {
+      final hasPermission = await _ensureLocationPermission();
+      if (!hasPermission) {
+        if (!mounted) {
+          return;
+        }
         setState(() {
           _isLoading = false;
-          _hasLocationPermission = false;
-          _locationNotice =
-              'Location permission is off. Showing the default service area.';
         });
         return;
       }
@@ -136,9 +136,6 @@ class _HomeState extends State<Home> {
         }
         setState(() {
           _isLoading = false;
-          _hasLocationPermission = false;
-          _locationNotice =
-              'Location services are disabled. Showing the default service area.';
         });
         return;
       }
@@ -153,9 +150,7 @@ class _HomeState extends State<Home> {
 
       setState(() {
         _userPosition = position;
-        _hasLocationPermission = true;
         _isLoading = false;
-        _locationNotice = null;
       });
     } catch (error) {
       if (!mounted) {
@@ -164,29 +159,9 @@ class _HomeState extends State<Home> {
 
       setState(() {
         _isLoading = false;
-        _hasLocationPermission = false;
-        _locationNotice =
-            'Could not read your location right now. Showing the default service area.';
       });
 
       debugPrint('Location lookup failed: $error');
-    }
-  }
-
-  void _handleMapCreated(MhjMapsMapController controller) {
-    if (_markersSeeded) {
-      return;
-    }
-
-    _markersSeeded = true;
-
-    for (final spot in _serviceSpots) {
-      controller.addCustomMarker(
-        position: spot.position,
-        width: 44,
-        height: 44,
-        child: _buildMarkerWidget(spot.color),
-      );
     }
   }
 
@@ -286,7 +261,9 @@ class __HomeContentState extends State<_HomeContent> {
   Position? _userPosition;
   bool _hasLocationPermission = false;
   bool _markersSeeded = false;
+  bool _userMarkerAdded = false;
   String? _locationNotice;
+  MhjMapsMapController? _mapController;
 
   // Sample recent jobs/products with more items for grid
   final List<Map<String, dynamic>> _recentItems = [
@@ -399,16 +376,21 @@ class __HomeContentState extends State<_HomeContent> {
     _getUserLocation();
   }
 
+  Future<bool> _ensureLocationPermission() async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   Future<void> _getUserLocation() async {
     try {
-      var status = await Permission.location.status;
-      if (!status.isGranted) {
-        status = await Permission.location.request();
-      }
-
-      if (!mounted) return;
-
-      if (!status.isGranted) {
+      final hasPermission = await _ensureLocationPermission();
+      if (!hasPermission) {
+        if (!mounted) return;
         setState(() {
           _hasLocationPermission = false;
           _locationNotice =
@@ -439,6 +421,10 @@ class __HomeContentState extends State<_HomeContent> {
         _hasLocationPermission = true;
         _locationNotice = null;
       });
+
+      if (_mapController != null && mounted) {
+        _addUserLocationMarker();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -451,6 +437,7 @@ class __HomeContentState extends State<_HomeContent> {
   }
 
   void _handleMapCreated(MhjMapsMapController controller) {
+    _mapController = controller;
     if (_markersSeeded) return;
     _markersSeeded = true;
 
@@ -462,6 +449,36 @@ class __HomeContentState extends State<_HomeContent> {
         child: _buildMarkerWidget(spot.color),
       );
     }
+
+    _addUserLocationMarker();
+  }
+
+  void _addUserLocationMarker() {
+    if (_mapController == null || _userPosition == null || _userMarkerAdded) {
+      return;
+    }
+
+    _mapController!.addCustomMarker(
+      position: MhjMapsLatLng(
+        lat: _userPosition!.latitude,
+        lng: _userPosition!.longitude,
+      ),
+      width: 34,
+      height: 34,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.blue,
+          shape: BoxShape.circle,
+          border: Border.fromBorderSide(
+            BorderSide(color: Colors.white, width: 3),
+          ),
+        ),
+      ),
+    );
+
+    setState(() {
+      _userMarkerAdded = true;
+    });
   }
 
   Widget _buildMarkerWidget(Color color) {

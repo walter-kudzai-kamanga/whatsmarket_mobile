@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:mhj_maps/mhj_maps.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 // Theme Colors (matching your main app)
 const Color _primaryGreen = Color(0xFF2E7D32);
@@ -281,20 +280,29 @@ class _ServiceProviderMapPageState extends State<ServiceProviderMapPage> {
     });
   }
 
+  Future<bool> _ensureLocationPermission() async {
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      final requested = await Geolocator.requestPermission();
+      return requested == LocationPermission.whileInUse ||
+          requested == LocationPermission.always;
+    }
+
+    return permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+  }
+
   Future<void> _getUserLocation() async {
     try {
-      final status = await Permission.locationWhenInUse.status;
-      if (!status.isGranted && !status.isLimited) {
-        final requested = await Permission.locationWhenInUse.request();
-        if (!requested.isGranted && !requested.isLimited) {
-          if (!mounted) return;
-          setState(() {
-            _hasLocationPermission = false;
-            _locationNotice =
-                'Location permission denied. Showing all providers.';
-          });
-          return;
-        }
+      final hasPermission = await _ensureLocationPermission();
+      if (!hasPermission) {
+        if (!mounted) return;
+        setState(() {
+          _hasLocationPermission = false;
+          _locationNotice =
+              'Location permission denied. Showing all providers.';
+        });
+        return;
       }
 
       if (!mounted) return;
@@ -320,12 +328,6 @@ class _ServiceProviderMapPageState extends State<ServiceProviderMapPage> {
         _userPosition = position;
         _hasLocationPermission = true;
         _locationNotice = null;
-      });
-    } on PermissionDeniedException catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _hasLocationPermission = false;
-        _locationNotice = 'Location permission denied. Showing all providers.';
       });
     } catch (error) {
       if (!mounted) return;
