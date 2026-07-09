@@ -1,17 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:mhj_maps/mhj_maps.dart';
 import 'package:mutswe/screens/mainScreens/home.dart';
 import 'package:mutswe/screens/rest/comparePage.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 // Theme Colors
 const Color _primaryGreen = Color(0xFF2E7D32);
-const Color _primaryLightGreen = Color(0xFF4CAF50);
-const Color _secondaryBeige = Color(0xFFF5F0E8);
-const Color _beigeDark = Color(0xFFE8DCC8);
 const Color _beigeLight = Color(0xFFFDFBF7);
 
 class Product {
@@ -431,7 +426,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
   String _selectedCategory = 'All';
   bool _isLoading = true;
   Position? _userPosition;
-  bool _hasLocationPermission = false;
   final Set<String> _compareList = {};
 
   final List<String> _categories = [
@@ -459,26 +453,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Future<void> _getUserLocation() async {
     try {
-      var status = await Permission.location.status;
-      if (!status.isGranted) {
-        status = await Permission.location.request();
+      final status = await Permission.locationWhenInUse.status;
+      if (!status.isGranted && !status.isLimited) {
+        final requested = await Permission.locationWhenInUse.request();
+        if (!requested.isGranted && !requested.isLimited) {
+          if (!mounted) return;
+          return;
+        }
       }
 
       if (!mounted) return;
 
-      if (!status.isGranted) {
-        setState(() {
-          _hasLocationPermission = false;
-        });
-        return;
-      }
-
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (!mounted) return;
-        setState(() {
-          _hasLocationPermission = false;
-        });
         return;
       }
 
@@ -490,13 +478,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
       setState(() {
         _userPosition = position;
-        _hasLocationPermission = true;
       });
+    } on PermissionDeniedException catch (_) {
+      if (!mounted) return;
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _hasLocationPermission = false;
-      });
       debugPrint('Location lookup failed: $error');
     }
   }

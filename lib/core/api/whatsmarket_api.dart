@@ -11,7 +11,7 @@ class WhatsMarketApi {
 
   static const String _defaultBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8080',
+    defaultValue: 'http://192.168.1.29:8080',
   );
 
   Uri _uri(String path, [Map<String, String>? query]) =>
@@ -86,11 +86,15 @@ class WhatsMarketApi {
     );
     _throwIfError(response);
     final list = jsonDecode(response.body) as List<dynamic>;
-    return list.map((e) => Product.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => Product.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>> compareProducts(String name) async {
-    final response = await _client.get(_uri('/products/compare', {'name': name}));
+    final response = await _client.get(
+      _uri('/products/compare', {'name': name}),
+    );
     _throwIfError(response);
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
@@ -121,7 +125,9 @@ class WhatsMarketApi {
     final response = await _client.get(_uri('/bookings', {'phone': phone}));
     _throwIfError(response);
     final list = jsonDecode(response.body) as List<dynamic>;
-    return list.map((e) => Booking.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => Booking.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> updateBookingStatus({

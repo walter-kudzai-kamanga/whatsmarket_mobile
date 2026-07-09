@@ -8,9 +8,6 @@ import 'package:permission_handler/permission_handler.dart';
 
 // Theme Colors (matching your main app)
 const Color _primaryGreen = Color(0xFF2E7D32);
-const Color _primaryLightGreen = Color(0xFF4CAF50);
-const Color _secondaryBeige = Color(0xFFF5F0E8);
-const Color _beigeDark = Color(0xFFE8DCC8);
 const Color _beigeLight = Color(0xFFFDFBF7);
 
 class ServiceProvider {
@@ -286,21 +283,21 @@ class _ServiceProviderMapPageState extends State<ServiceProviderMapPage> {
 
   Future<void> _getUserLocation() async {
     try {
-      var status = await Permission.location.status;
-      if (!status.isGranted) {
-        status = await Permission.location.request();
+      final status = await Permission.locationWhenInUse.status;
+      if (!status.isGranted && !status.isLimited) {
+        final requested = await Permission.locationWhenInUse.request();
+        if (!requested.isGranted && !requested.isLimited) {
+          if (!mounted) return;
+          setState(() {
+            _hasLocationPermission = false;
+            _locationNotice =
+                'Location permission denied. Showing all providers.';
+          });
+          return;
+        }
       }
 
       if (!mounted) return;
-
-      if (!status.isGranted) {
-        setState(() {
-          _hasLocationPermission = false;
-          _locationNotice =
-              'Location permission denied. Showing all providers.';
-        });
-        return;
-      }
 
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -323,6 +320,12 @@ class _ServiceProviderMapPageState extends State<ServiceProviderMapPage> {
         _userPosition = position;
         _hasLocationPermission = true;
         _locationNotice = null;
+      });
+    } on PermissionDeniedException catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _hasLocationPermission = false;
+        _locationNotice = 'Location permission denied. Showing all providers.';
       });
     } catch (error) {
       if (!mounted) return;

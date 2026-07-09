@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/api/api_models.dart';
 import '../../core/api/whatsmarket_api.dart';
@@ -18,7 +19,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final WhatsMarketApi _api = WhatsMarketApi();
   final Session _session = Session();
-  final List<String> _types = const ['all', 'plumber', 'electrician', 'salon', 'clinic'];
+  final List<String> _types = const [
+    'all',
+    'plumber',
+    'electrician',
+    'salon',
+    'clinic',
+  ];
   final TextEditingController _notesController = TextEditingController();
 
   List<Vendor> _vendors = [];
@@ -38,7 +45,33 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     try {
-      final pos = await Geolocator.getCurrentPosition();
+      final status = await Permission.locationWhenInUse.status;
+      if (!status.isGranted && !status.isLimited) {
+        final requested = await Permission.locationWhenInUse.request();
+        if (!requested.isGranted && !requested.isLimited) {
+          if (!mounted) return;
+          setState(() {
+            _vendors = [];
+            _error = 'Location permission is needed to find nearby providers.';
+          });
+          return;
+        }
+      }
+
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() {
+          _vendors = [];
+          _error =
+              'Location services are disabled. Enable them to find nearby providers.';
+        });
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
       final vendors = await _api.getNearbyVendors(
         lat: pos.latitude,
         lng: pos.longitude,
@@ -47,9 +80,16 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted) return;
       setState(() => _vendors = vendors);
+    } on PermissionDeniedException catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _vendors = [];
+        _error =
+            'Location permission was denied. You can enable it in Settings.';
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      setState(() => _error = 'Could not read your location right now.');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -84,9 +124,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Booking failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Booking failed: $e')));
     }
   }
 
@@ -107,7 +147,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: const Text(
                   'Nearby verified services',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 20),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -129,7 +173,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 10),
               if (_loading) const _HomeShimmer(),
-              if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
+              if (_error != null)
+                Text(_error!, style: const TextStyle(color: Colors.red)),
               if (!_loading && _error == null && _vendors.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(18),
@@ -140,13 +185,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: const Row(
                     children: [
-                      Icon(CupertinoIcons.location_solid, color: AppColors.primaryGreen),
+                      Icon(
+                        CupertinoIcons.location_solid,
+                        color: AppColors.primaryGreen,
+                      ),
                       SizedBox(width: 10),
-                      Expanded(child: Text('No vendors found nearby. Try a different category or refresh.')),
+                      Expanded(
+                        child: Text(
+                          'No vendors found nearby. Try a different category or refresh.',
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ..._vendors.map((v) => _VendorCard(vendor: v, onBook: () => _bookVendor(v))),
+              ..._vendors.map(
+                (v) => _VendorCard(vendor: v, onBook: () => _bookVendor(v)),
+              ),
             ],
           ),
         ),
@@ -207,8 +261,13 @@ class _VendorCard extends StatelessWidget {
         border: Border.all(color: AppColors.beigeDark),
       ),
       child: ListTile(
-        title: Text(vendor.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text('${vendor.type} • ${vendor.suburb}, ${vendor.city} • ★ ${vendor.rating.toStringAsFixed(1)}'),
+        title: Text(
+          vendor.name,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          '${vendor.type} • ${vendor.suburb}, ${vendor.city} • ★ ${vendor.rating.toStringAsFixed(1)}',
+        ),
         trailing: CupertinoButton(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           color: AppColors.primaryGreen,
